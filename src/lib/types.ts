@@ -53,3 +53,30 @@ export interface InvitePreview {
 	members: { id: string; display_name: string; claimed: boolean }[];
 	already_member: boolean;
 }
+
+export interface Run {
+	id: string;
+	group_id: string;
+	restaurant_id: string;
+	started_by: string | null;
+	note: string | null;
+	status: 'open' | 'closed';
+	created_at: string;
+	closed_at: string | null;
+}
+
+export interface RunParticipant {
+	id: string;
+	run_id: string;
+	member_id: string;
+	/** One-off order for this run only. Null means "my usual". */
+	override_text: string | null;
+	created_at: string;
+}
+
+/** Open run plus display bits, for banners and the restaurant screen. */
+export interface OpenRunSummary extends Run {
+	restaurant_name: string;
+	starter_name: string | null;
+	participant_count: number;
+}

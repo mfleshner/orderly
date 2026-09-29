@@ -9,10 +9,14 @@
 		friendlyError,
 		getGroup,
 		getMyMember,
+		listOpenRuns,
 		listRestaurants,
 		usualCounts
 	} from '$lib/api';
-	import type { Group, Member, Restaurant } from '$lib/types';
+	import type { Group, Member, OpenRunSummary, Restaurant } from '$lib/types';
+
+	/** Open runs older than this drop off the banner (RUNS.md open decision). */
+	const STALE_RUN_MS = 12 * 60 * 60 * 1000;
 
 	const gid = $derived(page.params.gid ?? '');
 
@@ -23,6 +27,7 @@
 	let me = $state<Member | null>(null);
 	let restaurants = $state<Restaurant[]>([]);
 	let counts = $state<Record<string, number>>({});
+	let openRuns = $state<OpenRunSummary[]>([]);
 
 	let query = $state('');
 	let adding = $state(false);
@@ -43,14 +48,21 @@
 				return;
 			}
 			me = member;
-			const [g, rs, c] = await Promise.all([
+			const [g, rs, c, runs] = await Promise.all([
 				getGroup(groupId),
 				listRestaurants(groupId),
-				usualCounts(groupId)
+				usualCounts(groupId),
+				// Banners are a nice-to-have: a failure here just hides them.
+				listOpenRuns(groupId).catch(() => [] as OpenRunSummary[])
 			]);
 			group = g;
 			restaurants = rs;
 			counts = c;
+			const cutoff = Date.now() - STALE_RUN_MS;
+			openRuns = runs.filter((r) => {
+				const t = Date.parse(r.created_at);
+				return Number.isNaN(t) || t >= cutoff;
+			});
 		} catch (e) {
 			error = friendlyError(e);
 		} finally {
@@ -151,6 +163,28 @@
 			<button class="btn-secondary mt-2" onclick={() => load(gid)}>Try again</button>
 		</div>
 	{:else}
+		{#if openRuns.length}
+			<div class="mb-3 flex flex-col gap-2">
+				{#each openRuns as run (run.id)}
+					{@const note = run.note?.trim()}
+					<a
+						href={`/g/${gid}/run/${run.id}`}
+						class="flex min-h-14 items-center gap-3 rounded-card border border-accent/25 bg-accent-soft px-4 py-3 text-accent-ink active:scale-[0.99] active:bg-accent/15"
+					>
+						<span class="relative flex h-3 w-3 shrink-0" aria-hidden="true">
+							<span class="absolute inset-0 animate-ping rounded-full bg-accent opacity-60"></span>
+							<span class="relative h-3 w-3 rounded-full bg-accent"></span>
+						</span>
+						<span class="min-w-0 flex-1 text-[17px] leading-snug break-words">
+							{#if run.starter_name}{run.starter_name} is going to <span class="font-bold">{run.restaurant_name || 'get food'}</span>{:else}<span class="font-bold">{run.restaurant_name || 'Food'} run</span>{/if}
+							{#if note}· {note}{/if} · {run.participant_count} in
+						</span>
+						<svg class="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+					</a>
+				{/each}
+			</div>
+		{/if}
+
 		<!-- Search doubles as "add restaurant" -->
 		<div class="relative">
 			<svg class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-ink-3" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>

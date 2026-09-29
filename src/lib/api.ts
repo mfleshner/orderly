@@ -1,5 +1,16 @@
 import { supabase } from './supabase';
-import type { Group, InvitePreview, Member, MemberOrder, Order, OrderItem, Restaurant } from './types';
+import type {
+	Group,
+	InvitePreview,
+	Member,
+	MemberOrder,
+	OpenRunSummary,
+	Order,
+	OrderItem,
+	Restaurant,
+	Run,
+	RunParticipant
+} from './types';
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
 	if (res.error) throw new Error(res.error.message);
@@ -201,4 +212,104 @@ export async function saveOrder(
 			trying: tryingNote ?? ''
 		})
 	) as string;
+}
+
+// ---------------------------------------------------------------- runs (RUNS.md)
+
+/** Start a run at a restaurant; the caller is added as the first participant. Returns run id. */
+export async function startRun(restaurantId: string, note?: string): Promise<string> {
+	return check(
+		await supabase.rpc('start_run', { rid: restaurantId, run_note: note ?? null })
+	) as string;
+}
+
+export async function getRun(runId: string): Promise<Run> {
+	return check(await supabase.from('runs').select('*').eq('id', runId).single());
+}
+
+export async function listParticipants(runId: string): Promise<RunParticipant[]> {
+	return check(
+		await supabase.from('run_participants').select('*').eq('run_id', runId).order('created_at')
+	);
+}
+
+/** Add someone to a run (or update their override if already in). Null override = their usual. */
+export async function addParticipant(
+	runId: string,
+	memberId: string,
+	overrideText: string | null
+): Promise<void> {
+	check(
+		await supabase
+			.from('run_participants')
+			.upsert(
+				{ run_id: runId, member_id: memberId, override_text: overrideText?.trim() || null },
+				{ onConflict: 'run_id,member_id' }
+			)
+	);
+}
+
+export async function setOverride(participantId: string, overrideText: string | null): Promise<void> {
+	check(
+		await supabase
+			.from('run_participants')
+			.update({ override_text: overrideText?.trim() || null })
+			.eq('id', participantId)
+	);
+}
+
+export async function removeParticipant(participantId: string): Promise<void> {
+	check(await supabase.from('run_participants').delete().eq('id', participantId));
+}
+
+export async function closeRun(runId: string): Promise<void> {
+	check(
+		await supabase
+			.from('runs')
+			.update({ status: 'closed', closed_at: new Date().toISOString() })
+			.eq('id', runId)
+	);
+}
+
+/** Open runs in a group (optionally at one restaurant), newest first, with participant counts. */
+export async function listOpenRuns(groupId: string, restaurantId?: string): Promise<OpenRunSummary[]> {
+	let q = supabase
+		.from('runs')
+		.select('*, restaurants(name), starter:members(display_name), run_participants(count)')
+		.eq('group_id', groupId)
+		.eq('status', 'open')
+		.order('created_at', { ascending: false });
+	if (restaurantId) q = q.eq('restaurant_id', restaurantId);
+	const rows = check(await q) as unknown as (Run & {
+		restaurants: { name: string } | null;
+		starter: { display_name: string } | null;
+		run_participants: { count: number }[];
+	})[];
+	return rows.map(({ restaurants, starter, run_participants, ...run }) => ({
+		...run,
+		restaurant_name: restaurants?.name ?? '',
+		starter_name: starter?.display_name ?? null,
+		participant_count: run_participants[0]?.count ?? 0
+	}));
+}
+
+/**
+ * When each member last joined a run at this restaurant (member_id -> ISO time).
+ * Used to sort "Everyone else" with recent participants first.
+ */
+export async function recentParticipation(
+	restaurantId: string,
+	excludeRunId?: string
+): Promise<Record<string, string>> {
+	let q = supabase
+		.from('run_participants')
+		.select('member_id, created_at, runs!inner(restaurant_id)')
+		.eq('runs.restaurant_id', restaurantId)
+		.order('created_at', { ascending: false })
+		.limit(300);
+	if (excludeRunId) q = q.neq('run_id', excludeRunId);
+	const rows = check(await q) as unknown as { member_id: string; created_at: string }[];
+	const last: Record<string, string> = {};
+	for (const r of rows) if (!last[r.member_id]) last[r.member_id] = r.created_at;
+	return last;
 }

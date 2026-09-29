@@ -11,10 +11,12 @@
 		getMyMember,
 		getRestaurant,
 		getRestaurantOrders,
+		listOpenRuns,
+		startRun,
 		updateRestaurant
 	} from '$lib/api';
 	import { copyText, formatCopyOrder, formatItems } from '$lib/format';
-	import type { Member, MemberOrder, Restaurant } from '$lib/types';
+	import type { Member, MemberOrder, OpenRunSummary, Restaurant } from '$lib/types';
 
 	const gid = $derived(page.params.gid ?? '');
 	const rid = $derived(page.params.rid ?? '');
@@ -35,6 +37,14 @@
 	let sheetError = $state<string | null>(null);
 	let nameInput = $state<HTMLInputElement | null>(null);
 
+	// Open runs here + "Start a run" sheet
+	let openRuns = $state<OpenRunSummary[]>([]);
+	let runSheetOpen = $state(false);
+	let runNote = $state('');
+	let runBusy = $state(false);
+	let runError = $state<string | null>(null);
+	let runNoteInput = $state<HTMLInputElement | null>(null);
+
 	let seq = 0;
 
 	/** `quiet` refreshes in place (focus / visibility) without the spinner or clobbering on error. */
@@ -52,14 +62,17 @@
 				notMember = true;
 				return;
 			}
-			const [r, orders] = await Promise.all([
+			const [r, orders, runs] = await Promise.all([
 				getRestaurant(restaurantId),
-				getRestaurantOrders(groupId, restaurantId)
+				getRestaurantOrders(groupId, restaurantId),
+				// Banners are a nice-to-have: a failure here just hides them.
+				listOpenRuns(groupId, restaurantId).catch(() => [] as OpenRunSummary[])
 			]);
 			if (mine !== seq) return;
 			me = member;
 			restaurant = r;
 			rows = orders;
+			openRuns = runs;
 			error = null;
 		} catch (e) {
 			if (mine === seq && !quiet) error = friendlyError(e);
@@ -75,7 +88,14 @@
 	onMount(() => {
 		canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 		const refresh = () => {
-			if (document.visibilityState === 'visible' && !loading && !sheetOpen && gid && rid) {
+			if (
+				document.visibilityState === 'visible' &&
+				!loading &&
+				!sheetOpen &&
+				!runSheetOpen &&
+				gid &&
+				rid
+			) {
 				load(gid, rid, true);
 			}
 		};
@@ -159,6 +179,38 @@
 		}
 	}
 
+	function runHref(runId: string) {
+		return `/g/${gid}/run/${runId}`;
+	}
+
+	async function openRunSheet() {
+		runNote = '';
+		runError = null;
+		runSheetOpen = true;
+		await tick();
+		runNoteInput?.focus();
+	}
+
+	function closeRunSheet() {
+		if (!runBusy) runSheetOpen = false;
+	}
+
+	async function submitRun(e: SubmitEvent) {
+		e.preventDefault();
+		if (!restaurant || runBusy) return;
+		runBusy = true;
+		runError = null;
+		try {
+			const runId = await startRun(restaurant.id, runNote.trim() || undefined);
+			runSheetOpen = false;
+			await goto(runHref(runId));
+		} catch (err) {
+			runError = friendlyError(err);
+		} finally {
+			runBusy = false;
+		}
+	}
+
 	async function removeRestaurant() {
 		if (!restaurant || sheetBusy) return;
 		const n = usualCount;
@@ -183,7 +235,13 @@
 	<title>{restaurant?.name ?? 'Restaurant'} · Usual Order</title>
 </svelte:head>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && sheetOpen && closeSheet()} />
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key !== 'Escape') return;
+		if (runSheetOpen) closeRunSheet();
+		else if (sheetOpen) closeSheet();
+	}}
+/>
 
 <Header
 	title={restaurant?.name ?? (notMember ? 'Not in this group' : '')}
@@ -222,6 +280,46 @@
 			<button class="btn-secondary mt-2" onclick={() => load(gid, rid)}>Try again</button>
 		</div>
 	{:else}
+		{#if openRuns.length}
+			<div class="mb-3 flex flex-col gap-2">
+				{#each openRuns as run (run.id)}
+					<a
+						href={runHref(run.id)}
+						class="flex min-h-14 items-center gap-3 rounded-card border border-accent/25 bg-accent-soft px-4 py-3 text-accent-ink active:scale-[0.99] active:bg-accent/15"
+					>
+						<span class="relative flex h-3 w-3 shrink-0" aria-hidden="true">
+							<span class="absolute inset-0 animate-ping rounded-full bg-accent opacity-60"></span>
+							<span class="relative h-3 w-3 rounded-full bg-accent"></span>
+						</span>
+						<span class="min-w-0 flex-1 text-[17px] leading-snug break-words">
+							<span class="font-bold">Run open</span>
+							· {run.note?.trim() || 'no note'} · {run.participant_count} in
+						</span>
+						<svg class="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+					</a>
+				{/each}
+			</div>
+		{/if}
+
+		<button
+			type="button"
+			class="card mb-3 flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left active:bg-line/40"
+			onclick={openRunSheet}
+		>
+			<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 12H6.2L5 8z" /><path d="M9 10V6.5a3 3 0 0 1 6 0V10" /></svg>
+			</span>
+			<span class="min-w-0 flex-1">
+				<span class="block text-[17px] leading-snug font-semibold">
+					{openRuns.length ? 'Start another run' : 'Start a run'}
+				</span>
+				<span class="block text-[14px] leading-snug text-ink-3">
+					Just the folks going today
+				</span>
+			</span>
+			<svg class="shrink-0 text-ink-3" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+		</button>
+
 		<ul class="card divide-hair overflow-hidden">
 			{#each sorted as row (row.member.id)}
 				{@const isMe = row.member.id === me?.id}
@@ -308,6 +406,56 @@
 					{/if}
 				</button>
 			</div>
+		</div>
+	</div>
+{/if}
+
+{#if runSheetOpen && restaurant}
+	<div class="fixed inset-0 z-40">
+		<button
+			type="button"
+			class="absolute inset-0 bg-ink/40"
+			aria-label="Close"
+			onclick={closeRunSheet}
+		></button>
+		<div class="absolute inset-x-0 bottom-0">
+			<form
+				class="pb-safe mx-auto max-w-[520px] rounded-t-[20px] border-t border-line bg-card shadow-2xl"
+				onsubmit={submitRun}
+			>
+				<div class="px-4 pt-3 pb-4">
+					<div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line"></div>
+					<p class="text-[19px] font-bold">Start a run to {restaurant.name}</p>
+					<p class="mt-1 mb-4 text-[15px] leading-snug text-ink-2">
+						You're in. Pass the phone or share the link so others can hop on.
+					</p>
+					<label class="label" for="run-note"
+						>Note <span class="font-normal tracking-normal normal-case">(optional)</span></label
+					>
+					<input
+						id="run-note"
+						class="input"
+						bind:this={runNoteInput}
+						bind:value={runNote}
+						placeholder="leaving 11:30"
+						autocapitalize="sentences"
+						autocomplete="off"
+						enterkeyhint="go"
+						maxlength="120"
+					/>
+					{#if runError}
+						<p class="mt-3 text-[15px] text-danger">{runError}</p>
+					{/if}
+					<div class="mt-5 flex gap-2">
+						<button type="button" class="btn-secondary flex-1" onclick={closeRunSheet}>
+							Cancel
+						</button>
+						<button type="submit" class="btn-primary flex-[2]" disabled={runBusy}>
+							{runBusy ? 'Starting…' : 'Start run'}
+						</button>
+					</div>
+				</div>
+			</form>
 		</div>
 	</div>
 {/if}

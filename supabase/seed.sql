@@ -49,3 +49,21 @@ begin
   insert into public.order_items (order_id, item_name, quantity, modifiers, sort_order) values
     (o, 'Honey Butter Chicken Biscuit', 2, null, 0);
 end $$;
+
+-- One open run at Torchy's (RUNS.md): Matt started it, Jake is in with an override.
+-- Run after 0002_runs.sql.
+do $$
+declare
+  gid uuid; torchys uuid; matt uuid; jake uuid; run uuid;
+begin
+  select id into gid from public.groups where invite_code = 'TEST1';
+  select id into torchys from public.restaurants where group_id = gid and name like 'Torchy%';
+  select id into matt from public.members where group_id = gid and display_name = 'Matt';
+  select id into jake from public.members where group_id = gid and display_name = 'Jake';
+
+  insert into public.runs (group_id, restaurant_id, started_by, note)
+  values (gid, torchys, matt, 'leaving 11:30') returning id into run;
+  insert into public.run_participants (run_id, member_id, override_text) values
+    (run, matt, null),
+    (run, jake, 'No queso today, add a Democrat taco');
+end $$;

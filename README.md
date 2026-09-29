@@ -2,7 +2,7 @@
 
 Everyone logs their usual order at each restaurant. Whoever is picking up food opens one screen, sees everyone's order, and copies it in one tap.
 
-Static SvelteKit SPA + Supabase (Postgres, anonymous auth, RLS). No backend of our own. Deployed to **flerdle.com** on Netlify. See [PLAN.md](PLAN.md) for the product plan.
+Static SvelteKit SPA + Supabase (Postgres, anonymous auth, RLS). No backend of our own. Deployed to **flerdle.com** on Netlify. See [PLAN.md](PLAN.md) for the product plan and [RUNS.md](RUNS.md) for runs.
 
 ## Local setup
 
@@ -18,8 +18,8 @@ npm run dev
 
 1. Create a project at supabase.com (free tier is fine).
 2. **Authentication → Sign In / Providers**: enable **Allow anonymous sign-ins**.
-3. **SQL Editor**: paste and run `supabase/migrations/0001_init.sql`.
-4. Open the app once locally so an anonymous user exists, then run `supabase/seed.sql` in the SQL Editor. This creates a test group with invite code `TEST1` (members Matt, Jake, Sam, all reclaimable).
+3. **SQL Editor**: paste and run `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_runs.sql`.
+4. Open the app once locally so an anonymous user exists, then run `supabase/seed.sql` in the SQL Editor. This creates a test group with invite code `TEST1` (members Matt, Jake, Sam, all reclaimable) and one open run at Torchy's.
 5. **Authentication → URL Configuration**: set Site URL to `https://flerdle.com` and add `https://flerdle.com/**` and `http://localhost:5173/**` to Redirect URLs (only needed for the optional "Keep my account" email flow).
 6. **Project Settings → API**: copy the Project URL and the anon/publishable key into `.env` and into Netlify.
 
@@ -40,3 +40,4 @@ npm run dev
 | `npm run build` | Static site into `build/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run check` | Type-check Svelte + TS |
+| `npm run test:db` | Run migrations, seed, and RLS tests in an in-memory Postgres |

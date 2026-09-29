@@ -49,3 +49,20 @@ export async function copyText(text: string): Promise<boolean> {
 export function inviteLink(code: string): string {
 	return `${window.location.origin}/join/${code}`;
 }
+
+/**
+ * Copy text for a run: participants only. An override replaces that person's usual line.
+ * Participants with neither an override nor a usual are omitted.
+ */
+export function formatRunCopy(
+	restaurantName: string,
+	participants: { member: { display_name: string }; override_text: string | null; items: OrderItem[] }[]
+): string {
+	const lines = participants
+		.map((p) => {
+			const body = p.override_text?.trim() || formatItems(p.items);
+			return body ? `${p.member.display_name}: ${body}` : null;
+		})
+		.filter((l): l is string => !!l);
+	return [restaurantName, ...lines].join('\n');
+}

@@ -233,7 +233,7 @@ begin
   delete from public.order_items where order_id = oid;
   insert into public.order_items (order_id, item_name, quantity, modifiers, sort_order)
   select oid,
-         trim(i->>'item_name'),
+         left(trim(i->>'item_name'), 120),
          greatest(1, least(99, coalesce((i->>'quantity')::int, 1))),
          nullif(trim(coalesce(i->>'modifiers', '')), ''),
          ord - 1
