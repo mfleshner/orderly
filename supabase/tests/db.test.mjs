@@ -19,7 +19,6 @@ await db.exec(`
 `);
 await db.exec(fs.readFileSync(`${root}/migrations/0001_init.sql`, 'utf8'));
 await db.exec(fs.readFileSync(`${root}/migrations/0002_runs.sql`, 'utf8'));
-await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;`);
 
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';

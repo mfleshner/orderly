@@ -91,6 +91,8 @@ grant execute on function public.start_run(uuid, text) to authenticated;
 -- RLS
 -- ---------------------------------------------------------------------------
 
+grant select, insert, update, delete on public.runs, public.run_participants to authenticated;
+
 alter table public.runs             enable row level security;
 alter table public.run_participants enable row level security;
 

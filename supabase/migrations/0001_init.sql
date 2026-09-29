@@ -271,6 +271,13 @@ grant execute on function public.is_order_member(uuid) to authenticated;
 -- A user can read and write rows in any group where a members row has their user_id.
 -- ---------------------------------------------------------------------------
 
+-- Explicit table privileges so this works even with "Automatically expose new tables" off.
+-- Anonymous sign-ins use the `authenticated` role; RLS below is the real boundary.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on
+  public.groups, public.members, public.restaurants, public.orders, public.order_items
+  to authenticated;
+
 alter table public.groups      enable row level security;
 alter table public.members     enable row level security;
 alter table public.restaurants enable row level security;
