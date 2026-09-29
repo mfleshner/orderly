@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+/* One accent, warm paper background, hairline dividers. Phone-first. */
+@theme {
+	--color-paper: #f7f3ec;
+	--color-card: #fffdf9;
+	--color-ink: #1d1a17;
+	--color-ink-2: #5f5850;
+	--color-ink-3: #948b80;
+	--color-line: #e6dfd3;
+	--color-accent: #e4502b;
+	--color-accent-ink: #b63a1b;
+	--color-accent-soft: #fbe6de;
+	--color-warn: #9a6b00;
+	--color-warn-soft: #fff4d6;
+	--color-danger: #c62828;
+
+	--font-sans:
+		ui-rounded, -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'Segoe UI', Roboto,
+		'Helvetica Neue', Arial, sans-serif;
+
+	--radius-card: 14px;
+}
+
+html {
+	background: var(--color-paper);
+	color: var(--color-ink);
+	font-family: var(--font-sans);
+	-webkit-text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+
+body {
+	min-height: 100dvh;
+	overscroll-behavior-y: none;
+}
+
+/* Safe-area helpers for notched phones */
+.pt-safe {
+	padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Reusable primitives (Tailwind v4 custom utilities so they can be composed with @apply) */
+@utility btn {
+	@apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-[17px] font-semibold select-none transition-transform active:scale-[0.98] disabled:opacity-40;
+}
+@utility btn-primary {
+	@apply btn bg-accent text-white;
+}
+@utility btn-secondary {
+	@apply btn border border-line bg-card text-ink;
+}
+@utility btn-ghost {
+	@apply btn text-accent-ink;
+}
+@utility input {
+	@apply min-h-12 w-full rounded-xl border border-line bg-card px-4 text-[17px] text-ink outline-none placeholder:text-ink-3 focus:border-accent;
+}
+@utility card {
+	@apply rounded-card border border-line bg-card;
+}
+@utility label {
+	@apply mb-1.5 block text-[13px] font-semibold tracking-wide text-ink-3 uppercase;
+}
+@utility divide-hair {
+	& > * + * {
+		border-top: 1px solid var(--color-line);
+	}
+}

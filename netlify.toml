@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA fallback so deep links like /join/7KQ4M serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
