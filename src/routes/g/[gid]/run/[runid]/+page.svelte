@@ -411,7 +411,7 @@
 />
 
 {#snippet dot(color: string, size = 'h-3.5 w-3.5')}
-	<span class="{size} shrink-0 rounded-full" style:background-color={color} aria-hidden="true"
+	<span class="{size} inline-block shrink-0 rounded-full" style:background-color={color} aria-hidden="true"
 	></span>
 {/snippet}
 
