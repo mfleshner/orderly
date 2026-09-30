@@ -4,7 +4,7 @@ Last updated 2026-09-29.
 
 ## Where things stand
 
-- **Repo:** https://github.com/mfleshner/orderly on `main`. Everything is pushed; the last commit adds explicit table grants to the migrations.
+- **Repo:** https://github.com/mfleshner/orderly on `main`. Everything is pushed, and pushes to `main` deploy to flerdle.com.
 - **App:** built from PLAN.md, plus runs v1 (pass-the-phone) from RUNS.md. Type-check and build are clean.
 - **Database tests:** `npm run test:db` runs both migrations and the seed in an in-memory Postgres. All 38 tests pass.
 - **Local env:** `.env` is written. It holds the Supabase URL and the publishable key, and git ignores it.
@@ -19,14 +19,16 @@ Last updated 2026-09-29.
 - The test group is **Taco Tuesday**, invite code `686SR`, with Matt, Jake and Sam and an open run at Torchy's. The seed file was not used.
 - **Delete the access token** you pasted earlier. It isn't needed.
 
+## Netlify (done 2026-09-29)
+
+- The `flerdle` site, on mpaulfrank18's team, is linked to `mfleshner/orderly`, branch `main`. Every push to `main` deploys.
+- Both environment variables are set.
+- **Live and checked:** `https://flerdle.com/join/686SR` loads and shows the group from the database. The service worker and manifest load, and there are no console errors.
+
 ## To do next
 
-1. **Connect Netlify.**
-   - Open the existing **flerdle** site and go to **Site configuration → Build & deploy → Link repository**. Pick `mfleshner/orderly`, branch `main`.
-   - Add the environment variables `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_ANON_KEY`. Both values are in the local `.env`.
-   - `netlify.toml` already sets the build command, the `build` output folder, Node 22 and the fallback rule for deep links.
-2. **Check the live site.** Confirm `https://flerdle.com/join/686SR` loads.
-3. **Text the link to friends.** Fix what they complain about.
+1. **Text the invite link to friends.** Fix what they complain about. PLAN.md says to do that before polishing more.
+2. **Delete the Supabase access token** from earlier (Supabase → Account → Access Tokens).
 
 ## Later
 
