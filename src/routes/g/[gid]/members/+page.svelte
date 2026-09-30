@@ -123,9 +123,19 @@
 	let savingName = $state(false);
 	let nameInput = $state<HTMLInputElement | null>(null);
 
+	// Same palette the database assigns from, plus a few extras.
+	const PALETTE = [
+		'#e0533c', '#2f7fd6', '#2aa876', '#d9a021', '#9256d9',
+		'#d6479c', '#1fa3a3', '#e07a1f', '#5e6ad2', '#6e8b3d',
+		'#8b5a2b', '#3c3c3c'
+	];
+	let myColor = $state('');
+	const takenColors = $derived(new Set(members.filter((m) => m.id !== me?.id).map((m) => m.color)));
+
 	async function startEditMe() {
 		if (!me) return;
 		myName = me.display_name;
+		myColor = me.color;
 		nameError = null;
 		editingMe = true;
 		await tick();
@@ -138,21 +148,29 @@
 		if (!me || savingName) return;
 		const name = myName.trim();
 		if (!name) return;
-		if (name === me.display_name) {
+		const nameChanged = name !== me.display_name;
+		const colorChanged = myColor !== me.color;
+		if (!nameChanged && !colorChanged) {
 			editingMe = false;
 			return;
 		}
-		if (members.some((m) => m.id !== me!.id && m.display_name.toLowerCase() === name.toLowerCase())) {
+		if (
+			nameChanged &&
+			members.some((m) => m.id !== me!.id && m.display_name.toLowerCase() === name.toLowerCase())
+		) {
 			nameError = 'That name is taken in this group.';
 			return;
 		}
 		savingName = true;
 		nameError = null;
 		try {
-			await updateMember(me.id, { display_name: name });
+			await updateMember(me.id, {
+				...(nameChanged ? { display_name: name } : {}),
+				...(colorChanged ? { color: myColor } : {})
+			});
 			editingMe = false;
 			await refreshMembers();
-			toast('Name updated');
+			toast(nameChanged ? 'Name updated' : 'Color updated');
 		} catch (err) {
 			nameError = friendlyError(err);
 		} finally {
@@ -338,12 +356,43 @@
 							{#if nameError}
 								<p class="mt-2 text-[15px] text-danger">{nameError}</p>
 							{/if}
+
+							<p class="label mt-4">Your color</p>
+							<div class="grid grid-cols-6 gap-2" role="radiogroup" aria-label="Your color">
+								{#each PALETTE as c (c)}
+									{@const selected = c === myColor}
+									<button
+										type="button"
+										role="radio"
+										aria-checked={selected}
+										aria-label={takenColors.has(c) ? 'Color, used by someone else' : 'Color'}
+										class="relative flex h-12 w-full items-center justify-center rounded-xl transition-transform active:scale-95"
+										onclick={() => (myColor = c)}
+									>
+										<span
+											class="flex h-8 w-8 items-center justify-center rounded-full text-white ring-offset-2 ring-offset-card {selected ? 'ring-2 ring-ink' : ''}"
+											style="background-color: {c}"
+										>
+											{#if selected}
+												<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+											{/if}
+										</span>
+										{#if takenColors.has(c) && !selected}
+											<span class="absolute right-1.5 bottom-1.5 h-2 w-2 rounded-full bg-ink-3" title="Used by someone else"></span>
+										{/if}
+									</button>
+								{/each}
+							</div>
+							{#if takenColors.has(myColor)}
+								<p class="mt-1.5 text-[13px] text-ink-3">Someone else uses this color, but that's allowed.</p>
+							{/if}
+
 							<div class="mt-3 flex gap-2">
 								<button type="button" class="btn-secondary flex-1" onclick={() => (editingMe = false)}>
 									Cancel
 								</button>
 								<button type="submit" class="btn-primary flex-[2]" disabled={savingName || !myName.trim()}>
-									{savingName ? 'Saving…' : 'Save name'}
+									{savingName ? 'Saving…' : 'Save'}
 								</button>
 							</div>
 						</form>
@@ -352,7 +401,7 @@
 							type="button"
 							class="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left active:bg-line/40"
 							onclick={startEditMe}
-							aria-label="Change your name"
+							aria-label="Change your name or color"
 						>
 							<span class="h-4 w-4 shrink-0 rounded-full" style="background-color: {m.color}"></span>
 							<span class="min-w-0 flex-1 text-[17px] font-semibold break-words">
