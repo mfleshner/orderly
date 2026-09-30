@@ -23,6 +23,8 @@ Last updated 2026-09-29.
 
 - The `flerdle` site, on mpaulfrank18's team, is linked to `mfleshner/orderly`, branch `main`. Every push to `main` deploys.
 - Both environment variables are set.
+- The repo is public and your GitHub account is linked in Netlify. Both were needed: Netlify's free plan blocked pushes from a private repo by an unlinked contributor.
+- Migration `0003` (bring restaurants + usuals into a new group, fill usuals on join) is applied and live.
 - **Live and checked:** `https://flerdle.com/join/686SR` loads and shows the group from the database. The service worker and manifest load, and there are no console errors.
 
 ## To do next
