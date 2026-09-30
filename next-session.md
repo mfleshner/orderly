@@ -32,6 +32,10 @@ Last updated 2026-09-29.
 1. **Text the invite link to friends.** Fix what they complain about. PLAN.md says to do that before polishing more.
 2. **Delete the Supabase access token** from earlier (Supabase → Account → Access Tokens).
 
+## Known pitfall
+
+- **One account per browser.** Anonymous accounts live in browser storage, so Brave, Safari and the home-screen app on the same phone are three different accounts. Usuals only carry over between groups on the same account. Seen 2026-09-29 when a member joined from a different browser. Fix for the person: use the same browser they first joined from, or add an email under "Keep my account". Possible product fix: on join, also match by display name against members of the creator's other groups.
+
 ## Later
 
 - **Runs v2 from RUNS.md:** "I'm in" from your own phone, and live updates through Supabase Realtime. The migration already adds the runs tables to the realtime feed.
