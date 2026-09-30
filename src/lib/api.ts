@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type {
+	CopyableRestaurant,
 	Group,
 	InvitePreview,
 	Member,
@@ -51,11 +52,23 @@ export async function renameGroup(groupId: string, name: string): Promise<void> 
 	check(await supabase.from('groups').update({ name: name.trim() }).eq('id', groupId));
 }
 
-/** Creates the group and the caller's member row. Returns the new group id. */
-export async function createGroup(groupName: string, memberName: string): Promise<string> {
-	return check(
-		await supabase.rpc('create_group', { group_name: groupName, member_name: memberName })
-	) as string;
+/**
+ * Creates the group and the caller's member row. Returns the new group id.
+ * restaurantIds (from copyableRestaurants) are copied in along with the caller's usuals.
+ */
+export async function createGroup(
+	groupName: string,
+	memberName: string,
+	restaurantIds: string[] = []
+): Promise<string> {
+	const args: Record<string, unknown> = { group_name: groupName, member_name: memberName };
+	if (restaurantIds.length) args.restaurant_ids = restaurantIds;
+	return check(await supabase.rpc('create_group', args)) as string;
+}
+
+/** Restaurants across all your groups (duplicates merged), with your usual at each. */
+export async function copyableRestaurants(): Promise<CopyableRestaurant[]> {
+	return (check(await supabase.rpc('copyable_restaurants')) as CopyableRestaurant[] | null) ?? [];
 }
 
 /** Returns null if the code doesn't exist. */

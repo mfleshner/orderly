@@ -10,6 +10,7 @@ const db = new PGlite();
 // Minimal Supabase stand-ins
 await db.exec(`
   create role authenticated nologin;
+  create role anon nologin;
   create schema auth;
   create table auth.users (id uuid primary key, created_at timestamptz default now());
   create function auth.uid() returns uuid language sql stable as
@@ -19,6 +20,7 @@ await db.exec(`
 `);
 await db.exec(fs.readFileSync(`${root}/migrations/0001_init.sql`, 'utf8'));
 await db.exec(fs.readFileSync(`${root}/migrations/0002_runs.sql`, 'utf8'));
+await db.exec(fs.readFileSync(`${root}/migrations/0003_copy_restaurants.sql`, 'utf8'));
 
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
@@ -126,6 +128,71 @@ ok(await throws(B, `insert into run_participants(run_id,member_id) values ($1,$2
 ok((await as(C, `delete from run_participants where run_id=$1 returning id`, [runId])).rows.length === 0, 'closed run participants cannot be removed');
 ok((await as(C, `update runs set status='open' where id=$1 returning id`, [runId])).rows.length === 0, 'closed run cannot be reopened');
 ok((await as(C, `select * from run_participants where run_id=$1`, [runId])).rows.length === 2, 'closed run still readable');
+
+// ------------------------------------------------------------ copy restaurants into a new group
+// A is an active member of TEST1 (reclaimed Matt) and has left Lunch Crew.
+const dupes = (await as(A, `select create_group('Dupes','Matt') id`)).rows[0].id;
+ok((await db.query(`select count(*)::int n from restaurants where group_id=$1`, [dupes])).rows[0].n === 0, 'old two-argument create_group still works');
+await as(A, `insert into restaurants(group_id,name,note) values ($1,'  torchy''s TACOS ','The one on Eldorado'), ($1,'Chuy''s',null), ($1,'Torchy''s Tacos','downtown')`, [dupes]);
+
+const list = (await as(A, `select copyable_restaurants() j`)).rows[0].j;
+const names = list.map((x) => `${x.name.trim().toLowerCase()}|${(x.note ?? '').toLowerCase()}`);
+ok(list.length === 4, `copyable list deduped to 4 (got ${list.length}: ${names.join(', ')})`);
+const merged = list.find((x) => (x.note ?? '').toLowerCase() === 'the one on eldorado');
+ok(merged && merged.groups.length === 2, 'merged restaurant lists both source groups');
+ok(merged && merged.items.map((i) => i.item_name).join() === 'Trailer Park,Green chile queso', 'merged restaurant carries the copy that has my usual');
+ok(!list.some((x) => x.name === 'Torchys'), 'restaurants from a group I left are not offered');
+ok((await as(B, `select copyable_restaurants() j`)).rows[0].j.every((x) => x.groups.includes('Lunch Crew')), 'other users only see their own groups');
+
+const lunchR = r; // Lunch Crew restaurant, A is no longer a member there
+const ids = [...list.map((x) => x.id), lunchR];
+const fresh = (await as(A, `select create_group('Family','Matt',$1::uuid[]) id`, [ids])).rows[0].id;
+const copied = (await db.query(`select name, note from restaurants where group_id=$1 order by name, note`, [fresh])).rows;
+ok(copied.length === 4, `new group got 4 restaurants (got ${copied.length})`);
+ok(!copied.some((x) => x.name === 'Torchys'), 'restaurant from a group I left was not copied');
+const meFresh = (await db.query(`select id from members where group_id=$1`, [fresh])).rows[0].id;
+const usual = (await db.query(`select r.name, r.note, oi.item_name, oi.quantity, oi.modifiers, oi.sort_order from orders o join restaurants r on r.id=o.restaurant_id join order_items oi on oi.order_id=o.id where o.member_id=$1 order by r.name, oi.sort_order`, [meFresh])).rows;
+ok(usual.filter((x) => x.note === 'the one on Eldorado').map((x) => `${x.item_name}/${x.modifiers}`).join() === 'Trailer Park/trashy,Green chile queso/null', 'my Torchy\'s usual copied with modifiers and order');
+ok(usual.some((x) => x.name === 'Whataburger' && x.item_name === '#1 Whataburger'), 'my Whataburger usual copied');
+ok(!usual.some((x) => x.name === "Chuy's"), 'restaurant without a usual copied with no order');
+ok((await db.query(`select count(*)::int n from orders o join restaurants r on r.id=o.restaurant_id where r.group_id=$1`, [fresh])).rows[0].n === 2, 'only my own orders were copied');
+
+const sneaky = (await as(B, `select create_group('Sneaky','Bee',$1::uuid[]) id`, [list.map((x) => x.id)])).rows[0].id;
+ok((await db.query(`select count(*)::int n from restaurants where group_id=$1`, [sneaky])).rows[0].n === 0, 'cannot copy restaurants from groups I am not in');
+
+// ------------------------------------------------------------ joining fills your usuals from other groups
+// Fresh users: W (wife) has usuals in "Home"; M creates "Weekend" copying Home's restaurants; W joins.
+const W = '44444444-4444-4444-4444-444444444444', M = '55555555-5555-5555-5555-555555555555';
+await db.exec(`insert into auth.users(id) values ('${W}'),('${M}')`);
+const home = (await as(M, `select create_group('Home','Matt') id`)).rows[0].id;
+const homeCode = (await db.query(`select invite_code from groups where id=$1`, [home])).rows[0].invite_code;
+await as(W, `select join_group($1,'Wife',false)`, [homeCode]);
+const hChuys = (await as(M, `insert into restaurants(group_id,name,note) values ($1,'Chuy''s','north') returning id`, [home])).rows[0].id;
+const hPho = (await as(M, `insert into restaurants(group_id,name) values ($1,'Pho Place') returning id`, [home])).rows[0].id;
+const wifeHome = (await db.query(`select id from members where group_id=$1 and display_name='Wife'`, [home])).rows[0].id;
+await as(W, `select save_order($1,$2,$3::json,'queso next time')`, [hChuys, wifeHome, JSON.stringify([{ item_name: 'Chicka-Chicka Boom-Boom', quantity: 1, modifiers: 'extra sauce' }])]);
+await as(W, `select save_order($1,$2,$3::json,'')`, [hPho, wifeHome, JSON.stringify([{ item_name: 'Pho tai', quantity: 2 }])]);
+
+const homeList = (await as(M, `select copyable_restaurants() j`)).rows[0].j.filter((x) => x.groups.includes('Home'));
+const weekend = (await as(M, `select create_group('Weekend','Matt',$1::uuid[]) id`, [homeList.map((x) => x.id)])).rows[0].id;
+const wkCode = (await db.query(`select invite_code from groups where id=$1`, [weekend])).rows[0].invite_code;
+await as(W, `select join_group($1,'Wife',false)`, [wkCode]);
+const wifeWk = (await db.query(`select id from members where group_id=$1 and display_name='Wife'`, [weekend])).rows[0].id;
+const wkOrders = (await db.query(`select r.name, o.trying_note, oi.item_name, oi.quantity, oi.modifiers from orders o join restaurants r on r.id=o.restaurant_id join order_items oi on oi.order_id=o.id where o.member_id=$1 order by r.name`, [wifeWk])).rows;
+ok(wkOrders.length === 2, `joining filled 2 usuals from my other group (got ${wkOrders.length})`);
+ok(wkOrders.some((x) => x.name === "Chuy's" && x.item_name === 'Chicka-Chicka Boom-Boom' && x.modifiers === 'extra sauce' && x.trying_note === 'queso next time'), 'filled usual keeps items, modifiers, trying note');
+ok(wkOrders.some((x) => x.name === 'Pho Place' && x.quantity === 2), 'filled usual keeps quantity');
+
+// Never overwrite: W edits her Weekend Pho usual, leaves, reclaims; it stays as edited.
+const wkPho = (await db.query(`select id from restaurants where group_id=$1 and name='Pho Place'`, [weekend])).rows[0].id;
+await as(W, `select save_order($1,$2,$3::json,'')`, [wkPho, wifeWk, JSON.stringify([{ item_name: 'Bun bo hue', quantity: 1 }])]);
+await as(W, `select remove_member($1)`, [wifeWk]);
+await as(W, `select join_group($1,'wife',true)`, [wkCode]);
+const pho = (await db.query(`select oi.item_name from orders o join order_items oi on oi.order_id=o.id where o.member_id=$1 and o.restaurant_id=$2`, [wifeWk, wkPho])).rows;
+ok(pho.length === 1 && pho[0].item_name === 'Bun bo hue', 'rejoin never overwrites an existing usual');
+
+ok((await db.query(`select count(*)::int n from orders o join members m on m.id=o.member_id where m.group_id=$1 and m.display_name='Matt'`, [weekend])).rows[0].n === 0, 'other members untouched when someone joins');
+ok(await throws(W, `select fill_usuals_from_other_groups($1)`, [wifeWk]), 'fill function is not callable from the browser');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

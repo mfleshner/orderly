@@ -80,3 +80,15 @@ export interface OpenRunSummary extends Run {
 	starter_name: string | null;
 	participant_count: number;
 }
+
+/** A restaurant from one of your groups that can be copied into a new group (deduplicated). */
+export interface CopyableRestaurant {
+	id: string;
+	name: string;
+	note: string | null;
+	/** Names of the groups this restaurant appears in. */
+	groups: string[];
+	/** Your usual there, if any. */
+	items: OrderItem[];
+	trying_note: string | null;
+}
