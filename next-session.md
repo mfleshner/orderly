@@ -38,5 +38,7 @@ Last updated 2026-09-29.
 
 ## Later
 
+- **Account screen (ACCOUNT.md):** account icon on the home screen, `/account` with sign in / save email, 6-digit code instead of a link. Spec is written; not built.
+
 - **Runs v2 from RUNS.md:** "I'm in" from your own phone, and live updates through Supabase Realtime. The migration already adds the runs tables to the realtime feed.
 - **Commit email:** commits use your heads-up.com work email. Say so if the repo should use a personal email instead.
